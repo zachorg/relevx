@@ -1,0 +1,16 @@
+{
+  "name": "infowhale",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:web": "cd apps/web && pnpm dev",
+    "dev:mobile": "cd apps/mobile && pnpm start",
+    "build:web": "cd apps/web && pnpm build",
+    "clean": "pnpm -r exec rm -rf node_modules && rm -rf node_modules",
+    "install:all": "pnpm install"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
