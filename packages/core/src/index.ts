@@ -93,6 +93,16 @@ export type {
   ExtractionOptions,
 } from "./services/content-extractor";
 
+export {
+  executeResearch,
+  executeResearchForProject,
+  executeResearchBatch,
+} from "./services/research-engine";
+export type {
+  ResearchResult,
+  ResearchOptions,
+} from "./services/research-engine";
+
 // Hooks
 export { useAuth } from "./hooks/useAuth";
 export { useProjects } from "./hooks/useProjects";
