@@ -103,6 +103,49 @@ export type {
   ResearchOptions,
 } from "./services/research-engine";
 
+// Utils
+export {
+  normalizeUrl as utilNormalizeUrl,
+  isDuplicate,
+  addToProcessed,
+  filterDuplicates,
+  extractDomain,
+  isSameDomain,
+  groupByDomain,
+  calculateUrlSimilarity,
+  createUrlIndex,
+  checkDuplicates,
+} from "./utils/deduplication";
+
+export {
+  RateLimiter,
+  Throttle,
+  SimpleRateLimiter,
+  delay,
+  calculateBackoff,
+  executeWithRateLimit,
+  executeBatchWithRateLimit,
+  retryWithBackoff,
+} from "./utils/rate-limiter";
+
+export {
+  calculateDateRange,
+  calculateDateRangeByFrequency,
+  calculateDateRangeByPreference,
+  calculateNextRunTime,
+  isProjectDue,
+  formatDateForQuery,
+  getRelativeTimeDescription,
+  parsePublishedDate,
+  isDateInRange,
+  getTemporalKeywords,
+  formatDateRangeDisplay,
+  getStartOfDay,
+  getEndOfDay,
+  isOlderThan,
+} from "./utils/date-filters";
+export type { DateRange } from "./utils/date-filters";
+
 // Hooks
 export { useAuth } from "./hooks/useAuth";
 export { useProjects } from "./hooks/useProjects";
