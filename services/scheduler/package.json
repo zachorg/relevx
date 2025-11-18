@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:add-project": "tsx scripts/add-test-project.ts",
+    "test:list-projects": "tsx scripts/list-projects.ts"
   },
   "dependencies": {
     "core": "workspace:*",
