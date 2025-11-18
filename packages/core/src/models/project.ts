@@ -63,6 +63,10 @@ export interface Project {
   frequency: Frequency;
   resultsDestination: ResultsDestination;
   
+  // Scheduling configuration
+  deliveryTime: string; // HH:MM format (24-hour), e.g., "09:15", "14:30" - must be in 15-min increments
+  timezone: string; // IANA timezone identifier, e.g., "America/New_York", "Europe/London"
+  
   // Search configuration
   searchParameters?: SearchParameters;
   
