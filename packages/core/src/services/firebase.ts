@@ -8,6 +8,11 @@
  * See env.example for required variables.
  */
 
+// Load environment variables from .env file (for test scripts)
+import * as dotenv from "dotenv";
+import * as path from "path";
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
