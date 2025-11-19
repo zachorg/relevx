@@ -12,14 +12,6 @@
  * Includes retry logic and deduplication.
  */
 
-import {
-  collection,
-  doc,
-  setDoc,
-  getDoc,
-  addDoc,
-  updateDoc,
-} from "firebase/firestore";
 import { db } from "./firebase";
 import type { Project } from "../models/project";
 import type { SearchResult, NewSearchResult } from "../models/search-result";
@@ -135,19 +127,17 @@ async function getSearchHistory(
   userId: string,
   projectId: string
 ): Promise<SearchHistory> {
-  const historyRef = doc(
-    db,
-    "users",
-    userId,
-    "projects",
-    projectId,
-    "metadata",
-    "searchHistory"
-  );
+  const historyRef = db
+    .collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("metadata")
+    .doc("searchHistory");
 
-  const historyDoc = await getDoc(historyRef);
+  const historyDoc = await historyRef.get();
 
-  if (historyDoc.exists()) {
+  if (historyDoc.exists) {
     return historyDoc.data() as SearchHistory;
   }
 
@@ -166,7 +156,7 @@ async function getSearchHistory(
     updatedAt: Date.now(),
   };
 
-  await setDoc(historyRef, newHistory);
+  await historyRef.set(newHistory);
   return newHistory as SearchHistory;
 }
 
@@ -179,15 +169,13 @@ async function updateSearchHistory(
   newUrls: ProcessedUrl[],
   queryPerformance: Map<string, { relevant: number; total: number }>
 ): Promise<void> {
-  const historyRef = doc(
-    db,
-    "users",
-    userId,
-    "projects",
-    projectId,
-    "metadata",
-    "searchHistory"
-  );
+  const historyRef = db
+    .collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("metadata")
+    .doc("searchHistory");
 
   const history = await getSearchHistory(userId, projectId);
 
@@ -245,7 +233,7 @@ async function updateSearchHistory(
     }
   }
 
-  await updateDoc(historyRef, {
+  await historyRef.update({
     processedUrls: updatedUrls,
     urlIndex: updatedUrlIndex,
     queryPerformance: updatedQueryPerformance,
@@ -265,14 +253,12 @@ async function saveSearchResults(
   projectId: string,
   results: SearchResult[]
 ): Promise<void> {
-  const resultsCollection = collection(
-    db,
-    "users",
-    userId,
-    "projects",
-    projectId,
-    "searchResults"
-  );
+  const resultsCollection = db
+    .collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("searchResults");
 
   for (const result of results) {
     const resultData: NewSearchResult = {
@@ -292,7 +278,7 @@ async function saveSearchResults(
       fetchError: result.fetchError,
     };
 
-    await addDoc(resultsCollection, resultData);
+    await resultsCollection.add(resultData);
   }
 }
 
@@ -306,15 +292,10 @@ export async function executeResearch(
   const startedAt = Date.now();
 
   try {
-    // Load project
-    const projectDoc = await getDoc(doc(db, "users"));
-    // We need to find the project across all users - this is a simplified version
-    // In production, you'd pass userId or have a different lookup mechanism
-
-    // For now, we'll assume we have the project data
-    // This is a placeholder - in real implementation, userId should be passed
+    // This function is deprecated - use executeResearchForProject instead
+    // which requires userId parameter for proper data access
     throw new Error(
-      "executeResearch needs userId parameter - implementation incomplete"
+      "executeResearch needs userId parameter - use executeResearchForProject instead"
     );
   } catch (error: any) {
     return {
@@ -349,10 +330,14 @@ export async function executeResearchForProject(
 
   try {
     // 1. Load project
-    const projectRef = doc(db, "users", userId, "projects", projectId);
-    const projectDoc = await getDoc(projectRef);
+    const projectRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("projects")
+      .doc(projectId);
+    const projectDoc = await projectRef.get();
 
-    if (!projectDoc.exists()) {
+    if (!projectDoc.exists) {
       throw new Error(`Project ${projectId} not found`);
     }
 
@@ -647,7 +632,7 @@ export async function executeResearchForProject(
     );
 
     // 13. Update project execution tracking
-    await updateDoc(projectRef, {
+    await projectRef.update({
       lastRunAt: startedAt,
       nextRunAt,
       status: "active",
@@ -677,7 +662,12 @@ export async function executeResearchForProject(
 
     // Update project with error
     try {
-      await updateDoc(doc(db, "users", userId, "projects", projectId), {
+      const projectRef = db
+        .collection("users")
+        .doc(userId)
+        .collection("projects")
+        .doc(projectId);
+      await projectRef.update({
         lastRunAt: startedAt,
         status: "error",
         lastError: error.message,

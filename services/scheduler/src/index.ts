@@ -7,7 +7,6 @@
 
 import * as dotenv from "dotenv";
 import * as cron from "node-cron";
-import { initializeFirebaseAdmin, getFirestore } from "./firebase-admin";
 import { logger } from "./logger";
 
 // Load environment variables
@@ -34,7 +33,8 @@ interface Project {
 async function getDueProjects(): Promise<
   Array<{ userId: string; project: Project }>
 > {
-  const db = getFirestore();
+  // Import db from core package (uses Admin SDK in Node.js)
+  const { db } = await import("core");
   const now = Date.now();
   const dueProjects: Array<{ userId: string; project: Project }> = [];
 
@@ -142,7 +142,7 @@ async function executeProjectResearch(
 
     // Update project with error status
     try {
-      const db = getFirestore();
+      const { db } = await import("core");
       await db
         .collection("users")
         .doc(userId)
@@ -231,6 +231,17 @@ async function startScheduler(): Promise<void> {
     "FIREBASE_PROJECT_ID",
   ];
 
+  // Add Admin SDK credential requirement
+  if (
+    !process.env.FIREBASE_ADMIN_CLIENT_EMAIL &&
+    !process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+  ) {
+    logger.error(
+      "Missing Firebase Admin credentials. Set either FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_ADMIN_CLIENT_EMAIL + FIREBASE_ADMIN_PRIVATE_KEY"
+    );
+    process.exit(1);
+  }
+
   const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
   if (missingVars.length > 0) {
     logger.error("Missing required environment variables", {
@@ -239,15 +250,8 @@ async function startScheduler(): Promise<void> {
     process.exit(1);
   }
 
-  // Initialize Firebase Admin
-  try {
-    initializeFirebaseAdmin();
-  } catch (error: any) {
-    logger.error("Failed to initialize Firebase Admin", {
-      error: error.message,
-    });
-    process.exit(1);
-  }
+  // Firebase Admin is automatically initialized by core package when imported
+  logger.info("Firebase Admin SDK will be used (initialized by core package)");
 
   // Check if scheduler is enabled
   if (process.env.SCHEDULER_ENABLED === "false") {

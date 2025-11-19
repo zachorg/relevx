@@ -5,17 +5,6 @@
  * Uses subcollection pattern: users/{userId}/projects/{projectId}
  */
 
-import {
-  collection,
-  doc,
-  addDoc,
-  getDocs,
-  updateDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  Timestamp,
-} from "firebase/firestore";
 import { db } from "./firebase";
 import type { Project, NewProject, ProjectStatus } from "../models/project";
 import { calculateNextRunAt as calculateNextRunAtWithTimezone } from "../utils/scheduling";
@@ -24,7 +13,7 @@ import { calculateNextRunAt as calculateNextRunAtWithTimezone } from "../utils/s
  * Get the projects collection reference for a user
  */
 function getProjectsCollection(userId: string) {
-  return collection(db, "users", userId, "projects");
+  return db.collection("users").doc(userId).collection("projects");
 }
 
 /**
@@ -65,7 +54,7 @@ export async function createProject(
       updatedAt: now,
     };
 
-    const docRef = await addDoc(getProjectsCollection(userId), projectData);
+    const docRef = await getProjectsCollection(userId).add(projectData);
 
     return {
       id: docRef.id,
@@ -82,13 +71,11 @@ export async function createProject(
  */
 export async function listProjects(userId: string): Promise<Project[]> {
   try {
-    const q = query(
-      getProjectsCollection(userId),
-      orderBy("createdAt", "desc")
-    );
-    const snapshot = await getDocs(q);
+    const snapshot = await getProjectsCollection(userId)
+      .orderBy("createdAt", "desc")
+      .get();
 
-    return snapshot.docs.map((doc) => ({
+    return snapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data(),
     })) as Project[];
@@ -106,21 +93,20 @@ export function subscribeToProjects(
   userId: string,
   callback: (projects: Project[]) => void
 ): () => void {
-  const q = query(getProjectsCollection(userId), orderBy("createdAt", "desc"));
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const projects = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Project[];
-      callback(projects);
-    },
-    (error) => {
-      console.error("Error subscribing to projects:", error);
-    }
-  );
+  return getProjectsCollection(userId)
+    .orderBy("createdAt", "desc")
+    .onSnapshot(
+      (snapshot: any) => {
+        const projects = snapshot.docs.map((doc: any) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Project[];
+        callback(projects);
+      },
+      (error: any) => {
+        console.error("Error subscribing to projects:", error);
+      }
+    );
 }
 
 /**
@@ -132,8 +118,12 @@ export async function updateProjectStatus(
   status: ProjectStatus
 ): Promise<void> {
   try {
-    const projectRef = doc(db, "users", userId, "projects", projectId);
-    await updateDoc(projectRef, {
+    const projectRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("projects")
+      .doc(projectId);
+    await projectRef.update({
       status,
       updatedAt: Date.now(),
     });
@@ -157,8 +147,12 @@ export async function updateProjectExecution(
   }
 ): Promise<void> {
   try {
-    const projectRef = doc(db, "users", userId, "projects", projectId);
-    await updateDoc(projectRef, {
+    const projectRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("projects")
+      .doc(projectId);
+    await projectRef.update({
       ...updates,
       updatedAt: Date.now(),
     });
@@ -176,8 +170,12 @@ export async function activateProject(
   projectId: string
 ): Promise<void> {
   try {
-    const projectRef = doc(db, "users", userId, "projects", projectId);
-    await updateDoc(projectRef, {
+    const projectRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("projects")
+      .doc(projectId);
+    await projectRef.update({
       status: "active",
       updatedAt: Date.now(),
     });
