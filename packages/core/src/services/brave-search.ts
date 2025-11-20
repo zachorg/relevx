@@ -14,7 +14,7 @@ const BRAVE_SEARCH_API_URL = "https://api.search.brave.com/res/v1/web/search";
 
 // Rate limiting state
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
+const MIN_REQUEST_INTERVAL = 2500; // 2.5 seconds between requests
 
 /**
  * Initialize Brave Search API
