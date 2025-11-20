@@ -12,26 +12,16 @@
  * Includes retry logic and deduplication.
  */
 
-import {
-  collection,
-  doc,
-  setDoc,
-  getDoc,
-  addDoc,
-  updateDoc,
-} from "firebase/firestore";
 import { db } from "./firebase";
 import type { Project } from "../models/project";
-import type {
-  SearchResult,
-  NewSearchResult,
-} from "../models/search-result";
+import type { SearchResult, NewSearchResult } from "../models/search-result";
 import type {
   SearchHistory,
   NewSearchHistory,
   ProcessedUrl,
   QueryPerformance,
 } from "../models/search-history";
+import type { NewDeliveryLog, DeliveryStats } from "../models/delivery-log";
 import {
   generateSearchQueriesWithRetry,
   analyzeRelevancyWithRetry,
@@ -51,6 +41,7 @@ import {
   extractMultipleContents,
   type ExtractedContent,
 } from "./content-extractor";
+import { calculateNextRunAt, validateFrequency } from "../utils/scheduling";
 
 /**
  * Research execution options
@@ -69,21 +60,21 @@ export interface ResearchOptions {
 export interface ResearchResult {
   success: boolean;
   projectId: string;
-  
+
   // Results
   relevantResults: SearchResult[];
   totalResultsAnalyzed: number;
   iterationsUsed: number;
-  
+
   // Queries
   queriesGenerated: string[];
   queriesExecuted: string[];
-  
+
   // URLs
   urlsFetched: number;
   urlsSuccessful: number;
   urlsRelevant: number;
-  
+
   // Report
   report?: {
     markdown: string;
@@ -91,10 +82,10 @@ export interface ResearchResult {
     summary: string;
     averageScore: number;
   };
-  
+
   // Errors
   error?: string;
-  
+
   // Timing
   startedAt: number;
   completedAt: number;
@@ -110,7 +101,7 @@ function calculateDateRange(frequency: "daily" | "weekly" | "monthly"): {
 } {
   const now = new Date();
   const dateTo = now.toISOString().split("T")[0]; // Today
-  
+
   let dateFrom: Date;
   switch (frequency) {
     case "daily":
@@ -123,7 +114,7 @@ function calculateDateRange(frequency: "daily" | "weekly" | "monthly"): {
       dateFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       break;
   }
-  
+
   return {
     dateFrom: dateFrom.toISOString().split("T")[0],
     dateTo,
@@ -137,22 +128,20 @@ async function getSearchHistory(
   userId: string,
   projectId: string
 ): Promise<SearchHistory> {
-  const historyRef = doc(
-    db,
-    "users",
-    userId,
-    "projects",
-    projectId,
-    "metadata",
-    "searchHistory"
-  );
-  
-  const historyDoc = await getDoc(historyRef);
-  
-  if (historyDoc.exists()) {
+  const historyRef = db
+    .collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("metadata")
+    .doc("searchHistory");
+
+  const historyDoc = await historyRef.get();
+
+  if (historyDoc.exists) {
     return historyDoc.data() as SearchHistory;
   }
-  
+
   // Create new history
   const newHistory: NewSearchHistory = {
     projectId,
@@ -167,8 +156,8 @@ async function getSearchHistory(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
-  
-  await setDoc(historyRef, newHistory);
+
+  await historyRef.set(newHistory);
   return newHistory as SearchHistory;
 }
 
@@ -181,27 +170,25 @@ async function updateSearchHistory(
   newUrls: ProcessedUrl[],
   queryPerformance: Map<string, { relevant: number; total: number }>
 ): Promise<void> {
-  const historyRef = doc(
-    db,
-    "users",
-    userId,
-    "projects",
-    projectId,
-    "metadata",
-    "searchHistory"
-  );
-  
+  const historyRef = db
+    .collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("metadata")
+    .doc("searchHistory");
+
   const history = await getSearchHistory(userId, projectId);
-  
+
   // Update processed URLs
   const updatedUrls = [...history.processedUrls];
   const updatedUrlIndex = { ...history.urlIndex };
-  
+
   for (const newUrl of newUrls) {
     const existing = updatedUrls.find(
       (u) => u.normalizedUrl === newUrl.normalizedUrl
     );
-    
+
     if (existing) {
       existing.timesFound++;
       existing.lastRelevancyScore = newUrl.lastRelevancyScore;
@@ -211,24 +198,25 @@ async function updateSearchHistory(
       updatedUrlIndex[newUrl.normalizedUrl] = true;
     }
   }
-  
+
   // Update query performance
   const updatedQueryPerformance = [...history.queryPerformance];
   const updatedQueryIndex = { ...history.queryIndex };
-  
+
   for (const [query, stats] of queryPerformance.entries()) {
     const existingIdx = updatedQueryIndex[query];
-    
+
     if (existingIdx !== undefined) {
       const existing = updatedQueryPerformance[existingIdx];
       existing.timesUsed++;
       existing.urlsFound += stats.total;
       existing.relevantUrlsFound += stats.relevant;
       existing.lastUsedAt = Date.now();
-      
+
       const totalRelevant = existing.relevantUrlsFound;
       const totalFound = existing.urlsFound;
-      existing.successRate = totalFound > 0 ? (totalRelevant / totalFound) * 100 : 0;
+      existing.successRate =
+        totalFound > 0 ? (totalRelevant / totalFound) * 100 : 0;
       existing.averageRelevancyScore =
         totalRelevant > 0 ? existing.averageRelevancyScore : 0;
     } else {
@@ -245,14 +233,15 @@ async function updateSearchHistory(
       updatedQueryIndex[query] = updatedQueryPerformance.length - 1;
     }
   }
-  
-  await updateDoc(historyRef, {
+
+  await historyRef.update({
     processedUrls: updatedUrls,
     urlIndex: updatedUrlIndex,
     queryPerformance: updatedQueryPerformance,
     queryIndex: updatedQueryIndex,
     totalUrlsProcessed: updatedUrls.length,
-    totalSearchesExecuted: history.totalSearchesExecuted + queryPerformance.size,
+    totalSearchesExecuted:
+      history.totalSearchesExecuted + queryPerformance.size,
     updatedAt: Date.now(),
   });
 }
@@ -264,16 +253,16 @@ async function saveSearchResults(
   userId: string,
   projectId: string,
   results: SearchResult[]
-): Promise<void> {
-  const resultsCollection = collection(
-    db,
-    "users",
-    userId,
-    "projects",
-    projectId,
-    "searchResults"
-  );
-  
+): Promise<string[]> {
+  const resultsCollection = db
+    .collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("searchResults");
+
+  const resultIds: string[] = [];
+
   for (const result of results) {
     const resultData: NewSearchResult = {
       projectId: result.projectId,
@@ -288,13 +277,87 @@ async function saveSearchResults(
       relevancyReason: result.relevancyReason,
       metadata: result.metadata,
       fetchedAt: result.fetchedAt,
-      analyzedAt: result.analyzedAt,
       fetchStatus: result.fetchStatus,
       fetchError: result.fetchError,
     };
-    
-    await addDoc(resultsCollection, resultData);
+
+    const docRef = await resultsCollection.add(resultData);
+    resultIds.push(docRef.id);
   }
+
+  return resultIds;
+}
+
+/**
+ * Save delivery log to Firestore
+ */
+async function saveDeliveryLog(
+  userId: string,
+  projectId: string,
+  project: Project,
+  report: {
+    markdown: string;
+    title: string;
+    summary: string;
+    averageScore: number;
+  },
+  stats: DeliveryStats,
+  searchResultIds: string[],
+  researchStartedAt: number,
+  researchCompletedAt: number
+): Promise<string> {
+  const deliveryLogsCollection = db
+    .collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("deliveryLogs");
+
+  // Determine destination and address based on project configuration
+  let destination: "email" | "slack" | "sms" = "email"; // Default
+  let destinationAddress = "pending";
+
+  if (project.resultsDestination !== "none" && project.deliveryConfig) {
+    if (
+      project.resultsDestination === "email" &&
+      project.deliveryConfig.email
+    ) {
+      destination = "email";
+      destinationAddress = project.deliveryConfig.email.address;
+    } else if (
+      project.resultsDestination === "slack" &&
+      project.deliveryConfig.slack
+    ) {
+      destination = "slack";
+      destinationAddress = project.deliveryConfig.slack.webhookUrl;
+    } else if (
+      project.resultsDestination === "sms" &&
+      project.deliveryConfig.sms
+    ) {
+      destination = "sms";
+      destinationAddress = project.deliveryConfig.sms.phoneNumber;
+    }
+  }
+
+  const deliveryLogData: NewDeliveryLog = {
+    projectId,
+    userId,
+    // For now, mark as pending delivery - actual delivery will be implemented later
+    destination,
+    destinationAddress,
+    reportMarkdown: report.markdown,
+    reportTitle: report.title,
+    stats,
+    status: "success", // Research was successful, even if delivery hasn't happened yet
+    retryCount: 0,
+    searchResultIds,
+    deliveredAt: researchCompletedAt, // For now, same as completion time
+    researchStartedAt,
+    researchCompletedAt,
+  };
+
+  const docRef = await deliveryLogsCollection.add(deliveryLogData);
+  return docRef.id;
 }
 
 /**
@@ -305,17 +368,12 @@ export async function executeResearch(
   options?: ResearchOptions
 ): Promise<ResearchResult> {
   const startedAt = Date.now();
-  
+
   try {
-    // Load project
-    const projectDoc = await getDoc(doc(db, "users"));
-    // We need to find the project across all users - this is a simplified version
-    // In production, you'd pass userId or have a different lookup mechanism
-    
-    // For now, we'll assume we have the project data
-    // This is a placeholder - in real implementation, userId should be passed
+    // This function is deprecated - use executeResearchForProject instead
+    // which requires userId parameter for proper data access
     throw new Error(
-      "executeResearch needs userId parameter - implementation incomplete"
+      "executeResearch needs userId parameter - use executeResearchForProject instead"
     );
   } catch (error: any) {
     return {
@@ -347,36 +405,49 @@ export async function executeResearchForProject(
 ): Promise<ResearchResult> {
   const startedAt = Date.now();
   const maxIterations = options?.maxIterations || 3;
-  
+
   try {
     // 1. Load project
-    const projectRef = doc(db, "users", userId, "projects", projectId);
-    const projectDoc = await getDoc(projectRef);
-    
-    if (!projectDoc.exists()) {
+    const projectRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("projects")
+      .doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
       throw new Error(`Project ${projectId} not found`);
     }
-    
+
     const project = { id: projectDoc.id, ...projectDoc.data() } as Project;
-    
-    // Get settings
+
+    // 2. Validate frequency (prevent running too often)
+    if (!validateFrequency(project.frequency, project.lastRunAt)) {
+      throw new Error(
+        `Project cannot be run more than once per day. Last run: ${new Date(
+          project.lastRunAt!
+        ).toISOString()}`
+      );
+    }
+
+    // 3. Get settings
     const minResults = options?.minResults || project.settings.minResults;
     const maxResults = options?.maxResults || project.settings.maxResults;
     const relevancyThreshold =
       options?.relevancyThreshold || project.settings.relevancyThreshold;
     const concurrentExtractions = options?.concurrentExtractions || 3;
-    
-    // 2. Load search history
+
+    // 4. Load search history
     const history = await getSearchHistory(userId, projectId);
     const processedUrlsSet = new Set(
       history.processedUrls.map((u) => u.normalizedUrl)
     );
-    
-    // 3. Prepare search filters
+
+    // 5. Prepare search filters
     const dateRange = project.searchParameters?.dateRangePreference
       ? calculateDateRange(project.frequency)
       : undefined;
-    
+
     const searchFilters: SearchFilters = {
       country: project.searchParameters?.region,
       language: project.searchParameters?.language,
@@ -385,8 +456,8 @@ export async function executeResearchForProject(
       dateFrom: dateRange?.dateFrom,
       dateTo: dateRange?.dateTo,
     };
-    
-    // Tracking
+
+    // 6. Tracking
     let allRelevantResults: SearchResult[] = [];
     let totalUrlsFetched = 0;
     let totalUrlsSuccessful = 0;
@@ -396,16 +467,14 @@ export async function executeResearchForProject(
       string,
       { relevant: number; total: number }
     >();
-    
-    // 4. Iteration loop (max 3 times)
+
+    // 7. Iteration loop (max 3 times)
     let iteration = 1;
-    
+
     while (iteration <= maxIterations) {
-      console.log(
-        `\n=== Research Iteration ${iteration}/${maxIterations} ===`
-      );
-      
-      // 4.1 Generate search queries
+      console.log(`\n=== Research Iteration ${iteration}/${maxIterations} ===`);
+
+      // 7.1 Generate search queries
       console.log("Generating search queries...");
       const generatedQueries = await generateSearchQueriesWithRetry(
         project.description,
@@ -413,61 +482,61 @@ export async function executeResearchForProject(
         history.queryPerformance,
         iteration
       );
-      
+
       const queries = generatedQueries.map((q) => q.query);
       allQueriesGenerated.push(...queries);
       console.log(`Generated ${queries.length} queries`);
-      
-      // 4.2 Execute searches
+
+      // 7.2 Execute searches
       console.log("Executing searches...");
       const searchResponses = await searchMultipleQueries(
         queries,
         searchFilters
       );
       allQueriesExecuted.push(...searchResponses.keys());
-      
-      // 4.3 Deduplicate results
+
+      // 7.3 Deduplicate results
       console.log("Deduplicating results...");
       const allBraveResults = Array.from(searchResponses.values());
       const uniqueResults = deduplicateResults(
         allBraveResults,
         processedUrlsSet
       );
-      
+
       console.log(
         `Found ${uniqueResults.length} unique URLs (after deduplication)`
       );
-      
+
       if (uniqueResults.length === 0) {
         console.log("No new URLs found, stopping iterations");
         break;
       }
-      
-      // 4.4 Extract content
+
+      // 7.4 Extract content
       console.log(`Extracting content from ${uniqueResults.length} URLs...`);
       const extractedContents = await extractMultipleContents(
         uniqueResults.map((r) => r.url),
         undefined,
         concurrentExtractions
       );
-      
+
       totalUrlsFetched += extractedContents.length;
       const successfulContents = extractedContents.filter(
         (c) => c.fetchStatus === "success" && c.snippet.length > 0
       );
       totalUrlsSuccessful += successfulContents.length;
-      
+
       console.log(
         `Successfully extracted ${successfulContents.length}/${extractedContents.length} URLs`
       );
-      
+
       if (successfulContents.length === 0) {
         console.log("No successful extractions, continuing to next iteration");
         iteration++;
         continue;
       }
-      
-      // 4.5 Analyze relevancy
+
+      // 7.5 Analyze relevancy
       console.log("Analyzing relevancy...");
       const contentsToAnalyze: ContentToAnalyze[] = successfulContents.map(
         (content) => ({
@@ -478,29 +547,29 @@ export async function executeResearchForProject(
           metadata: content.metadata,
         })
       );
-      
+
       const relevancyResults = await analyzeRelevancyWithRetry(
         contentsToAnalyze,
         project.description,
         project.searchParameters,
         relevancyThreshold
       );
-      
-      // 4.6 Filter and create SearchResult objects
+
+      // 7.6 Filter and create SearchResult objects
       const relevantResults = relevancyResults.filter((r) => r.isRelevant);
       console.log(
         `Found ${relevantResults.length} relevant results (threshold: ${relevancyThreshold})`
       );
-      
-      // Create SearchResult objects
+
+      // 7.7 Create SearchResult objects
       for (const relevancyResult of relevantResults) {
         const extractedContent = successfulContents.find(
           (c) => c.url === relevancyResult.url
         );
-        
+
         if (!extractedContent) continue;
-        
-        // Find source query
+
+        // 7.7.1 Find source query
         let sourceQuery = "unknown";
         for (const [query, response] of searchResponses.entries()) {
           if (response.results.some((r) => r.url === relevancyResult.url)) {
@@ -508,7 +577,8 @@ export async function executeResearchForProject(
             break;
           }
         }
-        
+
+        // 7.7.2 Create SearchResult
         const searchResult: SearchResult = {
           id: "", // Will be set by Firestore
           projectId,
@@ -535,49 +605,49 @@ export async function executeResearchForProject(
           analyzedAt: Date.now(),
           fetchStatus: extractedContent.fetchStatus,
         };
-        
+
         allRelevantResults.push(searchResult);
-        
-        // Update processed URLs
+
+        // 7.7.3 Update processed URLs
         processedUrlsSet.add(extractedContent.normalizedUrl);
       }
-      
-      // Track query performance
+
+      // 7.8 Track query performance
       for (const [query, response] of searchResponses.entries()) {
         const relevantCount = relevantResults.filter((r) =>
           response.results.some((br) => br.url === r.url)
         ).length;
-        
+
         queryPerformanceMap.set(query, {
           relevant: relevantCount,
           total: response.results.length,
         });
       }
-      
-      // 4.7 Check if we have enough results
+
+      // 7.9 Check if we have enough results
       if (allRelevantResults.length >= minResults) {
         console.log(
           `Found ${allRelevantResults.length} results (minimum: ${minResults}), stopping iterations`
         );
         break;
       }
-      
+
       console.log(
         `Only ${allRelevantResults.length}/${minResults} results found, continuing...`
       );
       iteration++;
     }
-    
-    // 5. Sort and limit results
+
+    // 8. Sort and limit results
     const sortedResults = allRelevantResults
       .sort((a, b) => b.relevancyScore - a.relevancyScore)
       .slice(0, maxResults);
-    
+
     console.log(
       `\nFinal: ${sortedResults.length} results (from ${allRelevantResults.length} total relevant)`
     );
-    
-    // 6. Compile report (if we have results)
+
+    // 9. Compile report (if we have results)
     let report;
     if (sortedResults.length > 0) {
       console.log("Compiling report...");
@@ -592,14 +662,14 @@ export async function executeResearchForProject(
         imageUrl: r.metadata.imageUrl,
         imageAlt: r.metadata.imageAlt,
       }));
-      
+
       const compiledReport = await compileReportWithRetry(
         resultsForReport,
         project.title,
         project.description,
         project.searchParameters
       );
-      
+
       report = {
         markdown: compiledReport.markdown,
         title: compiledReport.title,
@@ -607,14 +677,44 @@ export async function executeResearchForProject(
         averageScore: compiledReport.averageScore,
       };
     }
-    
-    // 7. Save results to Firestore
+
+    // 10. Save results to Firestore
     console.log("Saving results...");
+    let searchResultIds: string[] = [];
     if (sortedResults.length > 0) {
-      await saveSearchResults(userId, projectId, sortedResults);
+      searchResultIds = await saveSearchResults(
+        userId,
+        projectId,
+        sortedResults
+      );
     }
-    
-    // 8. Update search history
+
+    // 10.5. Save delivery log (with compiled report)
+    if (report && sortedResults.length > 0) {
+      console.log("Saving delivery log...");
+      const stats: DeliveryStats = {
+        totalResults: allRelevantResults.length,
+        includedResults: sortedResults.length,
+        averageRelevancyScore: report.averageScore,
+        searchQueriesUsed: allQueriesExecuted.length,
+        iterationsRequired: iteration,
+        urlsFetched: totalUrlsFetched,
+        urlsSuccessful: totalUrlsSuccessful,
+      };
+
+      await saveDeliveryLog(
+        userId,
+        projectId,
+        project,
+        report,
+        stats,
+        searchResultIds,
+        startedAt,
+        Date.now()
+      );
+    }
+
+    // 11. Update search history
     const newProcessedUrls: ProcessedUrl[] = sortedResults.map((r) => ({
       url: r.url,
       normalizedUrl: r.normalizedUrl,
@@ -623,23 +723,32 @@ export async function executeResearchForProject(
       lastRelevancyScore: r.relevancyScore,
       wasIncluded: true,
     }));
-    
+
     await updateSearchHistory(
       userId,
       projectId,
       newProcessedUrls,
       queryPerformanceMap
     );
-    
-    // 9. Update project execution tracking
-    await updateDoc(projectRef, {
+
+    // 12. Calculate next run time
+    const nextRunAt = calculateNextRunAt(
+      project.frequency,
+      project.deliveryTime,
+      project.timezone,
+      startedAt
+    );
+
+    // 13. Update project execution tracking
+    await projectRef.update({
       lastRunAt: startedAt,
+      nextRunAt,
       status: "active",
       updatedAt: Date.now(),
     });
-    
+
     const completedAt = Date.now();
-    
+
     return {
       success: true,
       projectId,
@@ -658,10 +767,15 @@ export async function executeResearchForProject(
     };
   } catch (error: any) {
     console.error("Research execution error:", error);
-    
+
     // Update project with error
     try {
-      await updateDoc(doc(db, "users", userId, "projects", projectId), {
+      const projectRef = db
+        .collection("users")
+        .doc(userId)
+        .collection("projects")
+        .doc(projectId);
+      await projectRef.update({
         lastRunAt: startedAt,
         status: "error",
         lastError: error.message,
@@ -670,7 +784,7 @@ export async function executeResearchForProject(
     } catch (updateError) {
       console.error("Failed to update project with error:", updateError);
     }
-    
+
     return {
       success: false,
       projectId,
@@ -698,7 +812,7 @@ export async function executeResearchBatch(
   options?: ResearchOptions
 ): Promise<ResearchResult[]> {
   const results: ResearchResult[] = [];
-  
+
   for (const { userId, projectId } of projects) {
     try {
       console.log(`\n=== Executing research for project ${projectId} ===`);
@@ -731,7 +845,6 @@ export async function executeResearchBatch(
       });
     }
   }
-  
+
   return results;
 }
-

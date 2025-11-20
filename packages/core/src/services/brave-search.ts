@@ -14,7 +14,7 @@ const BRAVE_SEARCH_API_URL = "https://api.search.brave.com/res/v1/web/search";
 
 // Rate limiting state
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
+const MIN_REQUEST_INTERVAL = 2500; // 2.5 seconds between requests
 
 /**
  * Initialize Brave Search API
@@ -133,10 +133,7 @@ export function normalizeUrl(url: string): string {
 /**
  * Build query string with site filters
  */
-function buildQueryWithFilters(
-  query: string,
-  filters?: SearchFilters
-): string {
+function buildQueryWithFilters(query: string, filters?: SearchFilters): string {
   let modifiedQuery = query;
 
   // Add site: operators for included domains
@@ -237,7 +234,7 @@ export async function searchWeb(
       );
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
 
     // Extract web results
     const webResults = data.web?.results || [];
@@ -344,4 +341,3 @@ export function deduplicateResults(
 
   return uniqueResults;
 }
-

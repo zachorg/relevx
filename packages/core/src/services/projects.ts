@@ -5,54 +5,15 @@
  * Uses subcollection pattern: users/{userId}/projects/{projectId}
  */
 
-import {
-  collection,
-  doc,
-  addDoc,
-  getDocs,
-  updateDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  Timestamp,
-} from "firebase/firestore";
 import { db } from "./firebase";
 import type { Project, NewProject, ProjectStatus } from "../models/project";
+import { calculateNextRunAt as calculateNextRunAtWithTimezone } from "../utils/scheduling";
 
 /**
  * Get the projects collection reference for a user
  */
 function getProjectsCollection(userId: string) {
-  return collection(db, "users", userId, "projects");
-}
-
-/**
- * Calculate next run time based on frequency
- */
-function calculateNextRunAt(frequency: "daily" | "weekly" | "monthly"): number {
-  const now = new Date();
-  
-  switch (frequency) {
-    case "daily":
-      // Next day at 8 AM UTC
-      now.setUTCDate(now.getUTCDate() + 1);
-      now.setUTCHours(8, 0, 0, 0);
-      break;
-    case "weekly":
-      // Next Monday at 8 AM UTC
-      const daysUntilMonday = (8 - now.getUTCDay()) % 7 || 7;
-      now.setUTCDate(now.getUTCDate() + daysUntilMonday);
-      now.setUTCHours(8, 0, 0, 0);
-      break;
-    case "monthly":
-      // 1st of next month at 8 AM UTC
-      now.setUTCMonth(now.getUTCMonth() + 1);
-      now.setUTCDate(1);
-      now.setUTCHours(8, 0, 0, 0);
-      break;
-  }
-  
-  return now.getTime();
+  return db.collection("users").doc(userId).collection("projects");
 }
 
 /**
@@ -64,30 +25,36 @@ export async function createProject(
 ): Promise<Project> {
   try {
     const now = Date.now();
-    
+
     // Set default settings if not provided
     const settings = data.settings || {
       relevancyThreshold: 60,
       minResults: 5,
       maxResults: 20,
     };
-    
+
     const projectData: Omit<Project, "id"> = {
       userId,
       title: data.title,
       description: data.description,
       frequency: data.frequency,
       resultsDestination: data.resultsDestination,
+      deliveryTime: data.deliveryTime,
+      timezone: data.timezone,
       searchParameters: data.searchParameters,
       settings,
       deliveryConfig: data.deliveryConfig,
       status: "draft", // New projects start as draft
-      nextRunAt: calculateNextRunAt(data.frequency),
+      nextRunAt: calculateNextRunAtWithTimezone(
+        data.frequency,
+        data.deliveryTime,
+        data.timezone
+      ),
       createdAt: now,
       updatedAt: now,
     };
 
-    const docRef = await addDoc(getProjectsCollection(userId), projectData);
+    const docRef = await getProjectsCollection(userId).add(projectData);
 
     return {
       id: docRef.id,
@@ -104,13 +71,11 @@ export async function createProject(
  */
 export async function listProjects(userId: string): Promise<Project[]> {
   try {
-    const q = query(
-      getProjectsCollection(userId),
-      orderBy("createdAt", "desc")
-    );
-    const snapshot = await getDocs(q);
+    const snapshot = await getProjectsCollection(userId)
+      .orderBy("createdAt", "desc")
+      .get();
 
-    return snapshot.docs.map((doc) => ({
+    return snapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data(),
     })) as Project[];
@@ -128,21 +93,20 @@ export function subscribeToProjects(
   userId: string,
   callback: (projects: Project[]) => void
 ): () => void {
-  const q = query(getProjectsCollection(userId), orderBy("createdAt", "desc"));
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const projects = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Project[];
-      callback(projects);
-    },
-    (error) => {
-      console.error("Error subscribing to projects:", error);
-    }
-  );
+  return getProjectsCollection(userId)
+    .orderBy("createdAt", "desc")
+    .onSnapshot(
+      (snapshot: any) => {
+        const projects = snapshot.docs.map((doc: any) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Project[];
+        callback(projects);
+      },
+      (error: any) => {
+        console.error("Error subscribing to projects:", error);
+      }
+    );
 }
 
 /**
@@ -154,8 +118,12 @@ export async function updateProjectStatus(
   status: ProjectStatus
 ): Promise<void> {
   try {
-    const projectRef = doc(db, "users", userId, "projects", projectId);
-    await updateDoc(projectRef, {
+    const projectRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("projects")
+      .doc(projectId);
+    await projectRef.update({
       status,
       updatedAt: Date.now(),
     });
@@ -179,8 +147,12 @@ export async function updateProjectExecution(
   }
 ): Promise<void> {
   try {
-    const projectRef = doc(db, "users", userId, "projects", projectId);
-    await updateDoc(projectRef, {
+    const projectRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("projects")
+      .doc(projectId);
+    await projectRef.update({
       ...updates,
       updatedAt: Date.now(),
     });
@@ -198,8 +170,12 @@ export async function activateProject(
   projectId: string
 ): Promise<void> {
   try {
-    const projectRef = doc(db, "users", userId, "projects", projectId);
-    await updateDoc(projectRef, {
+    const projectRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("projects")
+      .doc(projectId);
+    await projectRef.update({
       status: "active",
       updatedAt: Date.now(),
     });
