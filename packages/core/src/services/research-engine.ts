@@ -21,6 +21,7 @@ import type {
   ProcessedUrl,
   QueryPerformance,
 } from "../models/search-history";
+import type { NewDeliveryLog, DeliveryStats } from "../models/delivery-log";
 import {
   generateSearchQueriesWithRetry,
   analyzeRelevancyWithRetry,
@@ -252,13 +253,15 @@ async function saveSearchResults(
   userId: string,
   projectId: string,
   results: SearchResult[]
-): Promise<void> {
+): Promise<string[]> {
   const resultsCollection = db
     .collection("users")
     .doc(userId)
     .collection("projects")
     .doc(projectId)
     .collection("searchResults");
+
+  const resultIds: string[] = [];
 
   for (const result of results) {
     const resultData: NewSearchResult = {
@@ -278,8 +281,83 @@ async function saveSearchResults(
       fetchError: result.fetchError,
     };
 
-    await resultsCollection.add(resultData);
+    const docRef = await resultsCollection.add(resultData);
+    resultIds.push(docRef.id);
   }
+
+  return resultIds;
+}
+
+/**
+ * Save delivery log to Firestore
+ */
+async function saveDeliveryLog(
+  userId: string,
+  projectId: string,
+  project: Project,
+  report: {
+    markdown: string;
+    title: string;
+    summary: string;
+    averageScore: number;
+  },
+  stats: DeliveryStats,
+  searchResultIds: string[],
+  researchStartedAt: number,
+  researchCompletedAt: number
+): Promise<string> {
+  const deliveryLogsCollection = db
+    .collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("deliveryLogs");
+
+  // Determine destination and address based on project configuration
+  let destination: "email" | "slack" | "sms" = "email"; // Default
+  let destinationAddress = "pending";
+
+  if (project.resultsDestination !== "none" && project.deliveryConfig) {
+    if (
+      project.resultsDestination === "email" &&
+      project.deliveryConfig.email
+    ) {
+      destination = "email";
+      destinationAddress = project.deliveryConfig.email.address;
+    } else if (
+      project.resultsDestination === "slack" &&
+      project.deliveryConfig.slack
+    ) {
+      destination = "slack";
+      destinationAddress = project.deliveryConfig.slack.webhookUrl;
+    } else if (
+      project.resultsDestination === "sms" &&
+      project.deliveryConfig.sms
+    ) {
+      destination = "sms";
+      destinationAddress = project.deliveryConfig.sms.phoneNumber;
+    }
+  }
+
+  const deliveryLogData: NewDeliveryLog = {
+    projectId,
+    userId,
+    // For now, mark as pending delivery - actual delivery will be implemented later
+    destination,
+    destinationAddress,
+    reportMarkdown: report.markdown,
+    reportTitle: report.title,
+    stats,
+    status: "success", // Research was successful, even if delivery hasn't happened yet
+    retryCount: 0,
+    searchResultIds,
+    deliveredAt: researchCompletedAt, // For now, same as completion time
+    researchStartedAt,
+    researchCompletedAt,
+  };
+
+  const docRef = await deliveryLogsCollection.add(deliveryLogData);
+  return docRef.id;
 }
 
 /**
@@ -602,8 +680,38 @@ export async function executeResearchForProject(
 
     // 10. Save results to Firestore
     console.log("Saving results...");
+    let searchResultIds: string[] = [];
     if (sortedResults.length > 0) {
-      await saveSearchResults(userId, projectId, sortedResults);
+      searchResultIds = await saveSearchResults(
+        userId,
+        projectId,
+        sortedResults
+      );
+    }
+
+    // 10.5. Save delivery log (with compiled report)
+    if (report && sortedResults.length > 0) {
+      console.log("Saving delivery log...");
+      const stats: DeliveryStats = {
+        totalResults: allRelevantResults.length,
+        includedResults: sortedResults.length,
+        averageRelevancyScore: report.averageScore,
+        searchQueriesUsed: allQueriesExecuted.length,
+        iterationsRequired: iteration,
+        urlsFetched: totalUrlsFetched,
+        urlsSuccessful: totalUrlsSuccessful,
+      };
+
+      await saveDeliveryLog(
+        userId,
+        projectId,
+        project,
+        report,
+        stats,
+        searchResultIds,
+        startedAt,
+        Date.now()
+      );
     }
 
     // 11. Update search history
