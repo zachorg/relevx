@@ -14,25 +14,11 @@ import { logger } from "./logger";
 // Load environment variables
 dotenv.config();
 
+// Import types from core package
+import type { Project } from "core";
+
 // Provider instances (initialized once at startup)
 let providersInitialized = false;
-
-/**
- * Project interface (minimal fields needed for scheduling)
- */
-interface Project {
-  id: string;
-  userId: string;
-  title: string;
-  frequency: "daily" | "weekly" | "monthly";
-  deliveryTime: string;
-  timezone: string;
-  status: "active" | "paused" | "error" | "draft" | "running";
-  nextRunAt?: number;
-  lastRunAt?: number;
-  preparedDeliveryLogId?: string;
-  researchStartedAt?: number;
-}
 
 /**
  * Get check window in milliseconds (default: 15 minutes)
