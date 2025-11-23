@@ -7,6 +7,8 @@ import type { Project, NewProject } from "@/lib/projects";
 import {
   subscribeToProjects,
   createProject as createProjectService,
+  updateProject as updateProjectService,
+  toggleProjectActive as toggleProjectActiveService,
 } from "@/lib/projects";
 
 interface UseProjectsResult {
@@ -14,6 +16,14 @@ interface UseProjectsResult {
   loading: boolean;
   error: string | null;
   createProject: (data: NewProject) => Promise<Project | null>;
+  updateProject: (
+    projectId: string,
+    data: Partial<NewProject>
+  ) => Promise<boolean>;
+  toggleProjectActive: (
+    projectId: string,
+    isActive: boolean
+  ) => Promise<boolean>;
 }
 
 export function useProjects(userId: string | undefined): UseProjectsResult {
@@ -59,5 +69,44 @@ export function useProjects(userId: string | undefined): UseProjectsResult {
     [userId]
   );
 
-  return { projects, loading, error, createProject };
+  const updateProject = useCallback(
+    async (projectId: string, data: Partial<NewProject>): Promise<boolean> => {
+      try {
+        await updateProjectService(projectId, data);
+        return true;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to update project";
+        setError(errorMessage);
+        return false;
+      }
+    },
+    []
+  );
+
+  const toggleProjectActive = useCallback(
+    async (projectId: string, isActive: boolean): Promise<boolean> => {
+      try {
+        await toggleProjectActiveService(projectId, isActive);
+        return true;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Failed to toggle project status";
+        setError(errorMessage);
+        return false;
+      }
+    },
+    []
+  );
+
+  return {
+    projects,
+    loading,
+    error,
+    createProject,
+    updateProject,
+    toggleProjectActive,
+  };
 }

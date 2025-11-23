@@ -10,6 +10,8 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
+  doc,
+  updateDoc,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -81,4 +83,32 @@ export async function createProject(
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   } as Project;
+}
+
+/**
+ * Update an existing project
+ */
+export async function updateProject(
+  projectId: string,
+  data: Partial<NewProject>
+): Promise<void> {
+  const projectRef = doc(db, "projects", projectId);
+  await updateDoc(projectRef, {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Toggle project active status
+ */
+export async function toggleProjectActive(
+  projectId: string,
+  isActive: boolean
+): Promise<void> {
+  const projectRef = doc(db, "projects", projectId);
+  await updateDoc(projectRef, {
+    isActive,
+    updatedAt: serverTimestamp(),
+  });
 }

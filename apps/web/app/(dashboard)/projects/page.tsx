@@ -14,6 +14,14 @@ export default function ProjectsPage() {
   const { projects, loading } = useProjects(user?.uid);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
+  // Sort projects: active projects first, then paused projects
+  const sortedProjects = [...projects].sort((a, b) => {
+    // If both have same active status, maintain original order (by createdAt)
+    if (a.isActive === b.isActive) return 0;
+    // Active projects come first
+    return a.isActive ? -1 : 1;
+  });
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -77,7 +85,7 @@ export default function ProjectsPage() {
           className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
         >
           <AnimatePresence mode="popLayout">
-            {projects.map((project, index) => (
+            {sortedProjects.map((project, index) => (
               <motion.div
                 key={project.id}
                 initial={{ opacity: 0, y: 20 }}
