@@ -55,7 +55,13 @@ export function subscribeToProjects(
   return onSnapshot(q, (snapshot) => {
     const projects: Project[] = [];
     snapshot.forEach((doc) => {
-      projects.push({ id: doc.id, ...doc.data() } as Project);
+      const data = doc.data();
+      projects.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+      } as Project);
     });
     callback(projects);
   });
