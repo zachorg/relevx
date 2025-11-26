@@ -41,8 +41,21 @@ export function CreateProjectDialog({
   const [timezone, setTimezone] = useState(
     Intl.DateTimeFormat().resolvedOptions().timeZone
   );
+  const [priorityDomains, setPriorityDomains] = useState("");
+  const [excludedDomains, setExcludedDomains] = useState("");
+  const [requiredKeywords, setRequiredKeywords] = useState("");
+  const [excludedKeywords, setExcludedKeywords] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
+
+  // Helper function to parse comma-separated or newline-separated values
+  const parseList = (value: string): string[] => {
+    if (!value.trim()) return [];
+    return value
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +74,26 @@ export function CreateProjectDialog({
 
     setIsCreating(true);
     try {
+      // Build searchParameters object if any fields are filled
+      const searchParameters: any = {};
+      const priorityDomainsList = parseList(priorityDomains);
+      const excludedDomainsList = parseList(excludedDomains);
+      const requiredKeywordsList = parseList(requiredKeywords);
+      const excludedKeywordsList = parseList(excludedKeywords);
+
+      if (priorityDomainsList.length > 0) {
+        searchParameters.priorityDomains = priorityDomainsList;
+      }
+      if (excludedDomainsList.length > 0) {
+        searchParameters.excludedDomains = excludedDomainsList;
+      }
+      if (requiredKeywordsList.length > 0) {
+        searchParameters.requiredKeywords = requiredKeywordsList;
+      }
+      if (excludedKeywordsList.length > 0) {
+        searchParameters.excludedKeywords = excludedKeywordsList;
+      }
+
       await createProject({
         title: title.trim(),
         description: description.trim(),
@@ -68,6 +101,7 @@ export function CreateProjectDialog({
         resultsDestination,
         deliveryTime,
         timezone,
+        ...(Object.keys(searchParameters).length > 0 && { searchParameters }),
       });
 
       // Reset form and close dialog
@@ -77,6 +111,10 @@ export function CreateProjectDialog({
       setResultsDestination("email");
       setDeliveryTime("09:00");
       setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      setPriorityDomains("");
+      setExcludedDomains("");
+      setRequiredKeywords("");
+      setExcludedKeywords("");
       onOpenChange(false);
     } catch (err) {
       console.error("Failed to create project:", err);
@@ -97,6 +135,10 @@ export function CreateProjectDialog({
         setResultsDestination("email");
         setDeliveryTime("09:00");
         setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+        setPriorityDomains("");
+        setExcludedDomains("");
+        setRequiredKeywords("");
+        setExcludedKeywords("");
         setError("");
       }
     }
@@ -104,7 +146,7 @@ export function CreateProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[750px] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
@@ -118,8 +160,8 @@ export function CreateProjectDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-6 py-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="space-y-6 py-4 px-1 overflow-y-auto flex-1">
             {/* Title */}
             <div className="space-y-2">
               <Label htmlFor="title">
@@ -192,52 +234,124 @@ export function CreateProjectDialog({
               </p>
             </div>
 
-            {/* Delivery Time */}
+            {/* Delivery Time and Timezone */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="deliveryTime">Delivery Time</Label>
+                <TimePicker
+                  value={deliveryTime}
+                  onChange={setDeliveryTime}
+                  disabled={isCreating}
+                />
+                <p className="text-xs text-muted-foreground">
+                  What time should we deliver your research updates?
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="timezone">Timezone</Label>
+                <Select
+                  id="timezone"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  disabled={isCreating}
+                >
+                  <option value="America/New_York">Eastern Time (ET)</option>
+                  <option value="America/Chicago">Central Time (CT)</option>
+                  <option value="America/Denver">Mountain Time (MT)</option>
+                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                  <option value="America/Anchorage">Alaska Time (AKT)</option>
+                  <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                  <option value="Europe/London">London (GMT/BST)</option>
+                  <option value="Europe/Paris">Paris (CET/CEST)</option>
+                  <option value="Europe/Berlin">Berlin (CET/CEST)</option>
+                  <option value="Asia/Tokyo">Tokyo (JST)</option>
+                  <option value="Asia/Shanghai">Shanghai (CST)</option>
+                  <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
+                  <option value="Asia/Singapore">Singapore (SGT)</option>
+                  <option value="Asia/Dubai">Dubai (GST)</option>
+                  <option value="Asia/Kolkata">India (IST)</option>
+                  <option value="Australia/Sydney">Sydney (AEDT/AEST)</option>
+                  <option value="Australia/Melbourne">
+                    Melbourne (AEDT/AEST)
+                  </option>
+                  <option value="Pacific/Auckland">Auckland (NZDT/NZST)</option>
+                  <option value="UTC">UTC</option>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Select your timezone for accurate scheduling
+                </p>
+              </div>
+            </div>
+
+            {/* Priority Domains */}
             <div className="space-y-2">
-              <Label htmlFor="deliveryTime">Delivery Time</Label>
-              <TimePicker
-                value={deliveryTime}
-                onChange={setDeliveryTime}
+              <Label htmlFor="priorityDomains">Priority Domains</Label>
+              <Textarea
+                id="priorityDomains"
+                placeholder="e.g., example.com, news.site.com"
+                value={priorityDomains}
+                onChange={(e) => setPriorityDomains(e.target.value)}
                 disabled={isCreating}
+                rows={2}
               />
               <p className="text-xs text-muted-foreground">
-                What time should we deliver your research updates?
+                Domains to prioritize in search results (one per line or
+                comma-separated). We will prioritize content from these domains.
               </p>
             </div>
 
-            {/* Timezone */}
+            {/* Excluded Domains */}
             <div className="space-y-2">
-              <Label htmlFor="timezone">Timezone</Label>
-              <Select
-                id="timezone"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
+              <Label htmlFor="excludedDomains">Excluded Domains</Label>
+              <Textarea
+                id="excludedDomains"
+                placeholder="e.g., spam-site.com, unreliable.com"
+                value={excludedDomains}
+                onChange={(e) => setExcludedDomains(e.target.value)}
                 disabled={isCreating}
-              >
-                <option value="America/New_York">Eastern Time (ET)</option>
-                <option value="America/Chicago">Central Time (CT)</option>
-                <option value="America/Denver">Mountain Time (MT)</option>
-                <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                <option value="America/Anchorage">Alaska Time (AKT)</option>
-                <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
-                <option value="Europe/London">London (GMT/BST)</option>
-                <option value="Europe/Paris">Paris (CET/CEST)</option>
-                <option value="Europe/Berlin">Berlin (CET/CEST)</option>
-                <option value="Asia/Tokyo">Tokyo (JST)</option>
-                <option value="Asia/Shanghai">Shanghai (CST)</option>
-                <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
-                <option value="Asia/Singapore">Singapore (SGT)</option>
-                <option value="Asia/Dubai">Dubai (GST)</option>
-                <option value="Asia/Kolkata">India (IST)</option>
-                <option value="Australia/Sydney">Sydney (AEDT/AEST)</option>
-                <option value="Australia/Melbourne">
-                  Melbourne (AEDT/AEST)
-                </option>
-                <option value="Pacific/Auckland">Auckland (NZDT/NZST)</option>
-                <option value="UTC">UTC</option>
-              </Select>
+                rows={2}
+              />
               <p className="text-xs text-muted-foreground">
-                Select your timezone for accurate scheduling
+                Domains to exclude from search results (one per line or
+                comma-separated). Results from these domains will be filtered
+                out.
+              </p>
+            </div>
+
+            {/* Required Keywords */}
+            <div className="space-y-2">
+              <Label htmlFor="requiredKeywords">Keywords to Search For</Label>
+              <Textarea
+                id="requiredKeywords"
+                placeholder="e.g., machine learning, neural networks, AI"
+                value={requiredKeywords}
+                onChange={(e) => setRequiredKeywords(e.target.value)}
+                disabled={isCreating}
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                Keywords to include in searches to improve result quality (one
+                per line or comma-separated). These will be used to enhance
+                search queries.
+              </p>
+            </div>
+
+            {/* Excluded Keywords */}
+            <div className="space-y-2">
+              <Label htmlFor="excludedKeywords">Excluded Keywords</Label>
+              <Textarea
+                id="excludedKeywords"
+                placeholder="e.g., advertisement, sponsored, clickbait"
+                value={excludedKeywords}
+                onChange={(e) => setExcludedKeywords(e.target.value)}
+                disabled={isCreating}
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                Keywords to exclude from results (one per line or
+                comma-separated). Content containing these keywords will be
+                filtered out.
               </p>
             </div>
 

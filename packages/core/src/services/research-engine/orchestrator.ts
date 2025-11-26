@@ -172,9 +172,21 @@ export async function executeResearchForProject(
 
       // 7.1 Generate search queries
       console.log("Generating search queries...");
+
+      // Build additional context with keywords if provided
+      let additionalContext: string | undefined = undefined;
+      if (
+        project.searchParameters?.requiredKeywords &&
+        project.searchParameters.requiredKeywords.length > 0
+      ) {
+        additionalContext = `Please incorporate the following keywords into the search queries: ${project.searchParameters.requiredKeywords.join(
+          ", "
+        )}. These keywords are important for improving search result relevance.`;
+      }
+
       const generatedQueries = await llmProvider.generateSearchQueries(
         project.description,
-        undefined, // additionalContext
+        additionalContext,
         {
           count: 7,
           focusRecent:
@@ -255,9 +267,58 @@ export async function executeResearchForProject(
         continue;
       }
 
+      // 7.4.5 Filter by keywords if specified
+      let filteredContents = successfulContents;
+      const requiredKeywords = project.searchParameters?.requiredKeywords || [];
+      const excludedKeywords = project.searchParameters?.excludedKeywords || [];
+
+      if (requiredKeywords.length > 0 || excludedKeywords.length > 0) {
+        filteredContents = successfulContents.filter((content) => {
+          // Check for excluded keywords first (case-insensitive)
+          if (excludedKeywords.length > 0) {
+            const contentText = `${content.title || ""} ${content.snippet} ${
+              content.fullContent || ""
+            }`.toLowerCase();
+            const hasExcludedKeyword = excludedKeywords.some((keyword) =>
+              contentText.includes(keyword.toLowerCase())
+            );
+            if (hasExcludedKeyword) {
+              return false;
+            }
+          }
+
+          // Check for required keywords (case-insensitive)
+          if (requiredKeywords.length > 0) {
+            const contentText = `${content.title || ""} ${content.snippet} ${
+              content.fullContent || ""
+            }`.toLowerCase();
+            const hasRequiredKeyword = requiredKeywords.some((keyword) =>
+              contentText.includes(keyword.toLowerCase())
+            );
+            if (!hasRequiredKeyword) {
+              return false;
+            }
+          }
+
+          return true;
+        });
+
+        console.log(
+          `Filtered ${filteredContents.length}/${successfulContents.length} contents based on keyword filters`
+        );
+      }
+
+      if (filteredContents.length === 0) {
+        console.log(
+          "No contents passed keyword filtering, continuing to next iteration"
+        );
+        iteration++;
+        continue;
+      }
+
       // 7.5 Analyze relevancy
       console.log("Analyzing relevancy...");
-      const contentsToAnalyze: ContentToAnalyze[] = successfulContents.map(
+      const contentsToAnalyze: ContentToAnalyze[] = filteredContents.map(
         (content) => ({
           url: content.url,
           title: content.title,
@@ -284,7 +345,7 @@ export async function executeResearchForProject(
 
       // 7.7 Create SearchResult objects
       for (const relevancyResult of relevantResults) {
-        const extractedContent = successfulContents.find(
+        const extractedContent = filteredContents.find(
           (c) => c.url === relevancyResult.url
         );
 

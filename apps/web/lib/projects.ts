@@ -68,6 +68,7 @@ export async function createProject(
     resultsDestination: string;
     deliveryTime: string;
     timezone: string;
+    searchParameters?: any;
   }
 ): Promise<any> {
   const now = Date.now();
@@ -79,7 +80,7 @@ export async function createProject(
     data.timezone
   );
 
-  const projectData = {
+  const projectData: any = {
     userId,
     title: data.title,
     description: data.description,
@@ -97,6 +98,11 @@ export async function createProject(
     createdAt: now,
     updatedAt: now,
   };
+
+  // Include searchParameters if provided
+  if (data.searchParameters) {
+    projectData.searchParameters = data.searchParameters;
+  }
 
   // Store project in user's subcollection
   const docRef = await addDoc(
