@@ -47,7 +47,9 @@ export async function sendReportEmail(
           <div class="summary">
             <h3>Executive Summary</h3>
             <p>${report.summary}</p>
-            <p><strong>Average Relevancy Score:</strong> <span class="score">${report.averageScore}/100</span></p>
+            <p><strong>Average Relevancy Score:</strong> <span class="score">${
+              report.averageScore
+            }/100</span></p>
             <p><strong>Results Found:</strong> ${report.resultCount}</p>
           </div>
           
@@ -63,8 +65,13 @@ export async function sendReportEmail(
       </html>
     `;
 
+    const fromEmail = process.env.RESEND_FROM_EMAIL;
+    if (!fromEmail) {
+      throw new Error("RESEND_FROM_EMAIL is not set in environment variables");
+    }
+
     const { data, error } = await resend.emails.send({
-      from: "Relevx Research <research@relevx.com>", // You might need to update this based on your verified domain
+      from: fromEmail,
       to: [to],
       subject: `Research Report: ${report.title}`,
       html: htmlContent,
