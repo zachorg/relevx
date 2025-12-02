@@ -18,7 +18,7 @@ export interface PromptConfig {
  * Prompt templates for query generation
  */
 export const QUERY_GENERATION_PROMPTS: PromptConfig = {
-  model: "gpt-5-nano",
+  model: "gpt-4o-mini",
   responseFormat: "json_object",
   system: `You are a search query optimization expert. Your task is to generate diverse, effective search queries that will find relevant content on the web.
 
@@ -51,7 +51,7 @@ Generate 5-7 diverse search queries. Return ONLY a JSON object with this structu
  * Prompt templates for relevancy analysis
  */
 export const RELEVANCY_ANALYSIS_PROMPTS: PromptConfig = {
-  model: "gpt-5-nano",
+  model: "gpt-4o-mini",
   responseFormat: "json_object",
   system: `You are a content relevancy analyst. Your task is to analyze web content and determine how relevant it is to a user's research project.
 
@@ -93,7 +93,7 @@ Analyze each piece of content and return ONLY a JSON object with this structure:
  * Prompt templates for report compilation
  */
 export const REPORT_COMPILATION_PROMPTS: PromptConfig = {
-  model: "gpt-4.1-mini",
+  model: "gpt-4o-mini",
   responseFormat: "json_object",
   system: `You are a research report compiler. Your task is to create a comprehensive, well-structured markdown report from research findings.
 

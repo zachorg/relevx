@@ -15,16 +15,16 @@ import type {
 import {
   generateSearchQueries as openaiGenerateQueries,
   generateSearchQueriesWithRetry as openaiGenerateQueriesRetry,
-} from "../openai/query-generation";
+} from "./query-generation";
 import {
   analyzeRelevancy as openaiAnalyzeRelevancy,
   analyzeRelevancyWithRetry as openaiAnalyzeRelevancyRetry,
-} from "../openai/relevancy-analysis";
+} from "./relevancy-analysis";
 import {
   compileReport as openaiCompileReport,
   compileReportWithRetry as openaiCompileReportRetry,
-} from "../openai/report-compilation";
-import { initializeOpenAI as initOpenAI, getClient } from "../openai/client";
+} from "./report-compilation";
+import { initializeOpenAI as initOpenAI, getClient } from "./client";
 
 /**
  * OpenAI implementation of LLMProvider
