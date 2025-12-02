@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { CompiledReport } from "../openai/types";
+import { CompiledReport } from "../llm/types";
 
 // Initialize Resend client
 // We'll lazily initialize this to avoid errors if the API key is missing during build/test

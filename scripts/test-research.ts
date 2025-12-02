@@ -31,7 +31,7 @@ async function testMockResearch() {
 
   // Test 1: Query Generation
   console.log("1. Testing Query Generation...");
-  const { generateSearchQueriesWithRetry } = await import("../packages/core/src/services/openai");
+  const { generateSearchQueriesWithRetry } = await import("../packages/core/src/services/llm");
 
   const queries = await generateSearchQueriesWithRetry(
     "Latest developments in web development frameworks and best practices",
@@ -84,7 +84,7 @@ async function testMockResearch() {
 
   // Test 4: Relevancy Analysis
   console.log("4. Testing Relevancy Analysis...");
-  const { analyzeRelevancyWithRetry } = await import("../packages/core/src/services/openai");
+  const { analyzeRelevancyWithRetry } = await import("../packages/core/src/services/llm");
 
   const contentsToAnalyze = successfulExtractions.map((c) => ({
     url: c.url,
@@ -106,7 +106,7 @@ async function testMockResearch() {
   // Test 5: Report Compilation
   if (relevantResults.length > 0) {
     console.log("5. Testing Report Compilation...");
-    const { compileReportWithRetry } = await import("../packages/core/src/services/openai");
+    const { compileReportWithRetry } = await import("../packages/core/src/services/llm");
 
     const resultsForReport = relevantResults.map((r) => ({
       url: r.url,
