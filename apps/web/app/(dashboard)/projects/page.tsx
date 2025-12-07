@@ -8,10 +8,13 @@ import { useProjects } from "@/hooks/use-projects";
 import { Button } from "@/components/ui/button";
 import { ProjectCard } from "@/components/projects/project-card";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
+import { usePlans } from "@/hooks/use-plans";
+import { toast } from "react-toastify";
 
 export default function ProjectsPage() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { projects, loading } = useProjects(user?.uid);
+  const { plans, loading: plansLoading } = usePlans();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // Sort projects: active projects first, then paused projects
@@ -21,6 +24,14 @@ export default function ProjectsPage() {
     // Active projects come first
     return a.isActive ? -1 : 1;
   });
+
+  const handleCreateProject = () => {
+    const hasValidPlanId = userProfile?.planId !== "";
+    if (!hasValidPlanId) {
+      return;
+    }
+    setCreateDialogOpen(true);
+  };
 
   return (
     <div className="space-y-8">
@@ -40,7 +51,7 @@ export default function ProjectsPage() {
         <Button
           size="lg"
           className="gap-2"
-          onClick={() => setCreateDialogOpen(true)}
+          onClick={() => handleCreateProject()}
         >
           <Plus className="w-5 h-5" />
           New Project
@@ -69,7 +80,7 @@ export default function ProjectsPage() {
           <p className="text-muted-foreground mb-6">
             Create your first project to start tracking research topics
           </p>
-          <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
+          <Button onClick={() => handleCreateProject()} className="gap-2">
             <Plus className="w-4 h-4" />
             Create Project
           </Button>

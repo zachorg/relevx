@@ -29,8 +29,8 @@ export function CreateProjectDialog({
   open,
   onOpenChange,
 }: CreateProjectDialogProps) {
-  const { user } = useAuth();
-  const { createProject } = useProjects(user?.uid);
+  const { user, userProfile } = useAuth();
+  const { createProject } = useProjects(userProfile?.uid);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
