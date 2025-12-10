@@ -81,7 +81,7 @@ export class GeminiProvider implements LLMProvider {
         queries = parsed.queries;
       }
 
-      return queries.slice(0, options?.count || 7);
+      return queries.slice(0, options?.count || 5);
     } catch (error) {
       console.error("Gemini query generation error:", error);
       throw error;

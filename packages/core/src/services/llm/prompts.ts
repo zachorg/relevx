@@ -22,7 +22,7 @@ export const QUERY_GENERATION_PROMPTS: PromptConfig = {
   responseFormat: "json_object",
   system: `You are a search query optimization expert. Your task is to generate diverse, effective search queries that will find relevant content on the web.
 
-Generate 5-7 search queries using different strategies:
+Generate 5 search queries using different strategies:
 1. BROAD queries - general terms that cast a wide net
 2. SPECIFIC queries - precise terms with specific details
 3. QUESTION queries - phrased as questions people might ask
@@ -35,7 +35,7 @@ Queries should be concise (3-8 words typically) and use natural search language.
 
 {{additionalContext}}{{queryPerformanceContext}}{{iterationGuidance}}
 
-Generate 5-7 diverse search queries. Return ONLY a JSON object with this structure:
+Generate 5 diverse search queries. Return ONLY a JSON object with this structure:
 {
   "queries": [
     {

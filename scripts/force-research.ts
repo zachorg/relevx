@@ -185,41 +185,17 @@ async function forceResearch(
       console.log(`Delivery Log ID: ${result.deliveryLogId}\n`);
 
       // 4. Send email if configured and requested
-
-      // Use project delivery config, or fallback to user email
-      const deliveryEmail =
-        project.deliveryConfig?.email?.address || userEmail;
-
-      if (result.report && deliveryEmail) {
-        console.log(`📧 Sending delivery email to ${deliveryEmail}...`);
-        if (project.deliveryConfig?.email?.address) {
-          console.log("   (Using project-specific delivery address)");
-        } else {
-          console.log("   (Using user account email)");
-        }
-
-        try {
-          const emailResult = await sendReportEmail(
-            deliveryEmail,
-            result.report,
-            projectId
-          );
-
-          if (emailResult.success) {
-            console.log(`✓ Email sent successfully! ID: ${emailResult.id}\n`);
-          } else {
-            console.error(`✗ Failed to send email:`, emailResult.error);
-            console.error(`  (Continuing with delivery log update...)\n`);
-          }
-        } catch (emailError: any) {
-          console.error(`✗ Exception sending email:`, emailError.message);
-          console.error(`  (Continuing with delivery log update...)\n`);
-        }
-      } else if (result.report && !deliveryEmail) {
+      // NOTE: executeResearchForProject now handles email sending internally, 
+      // so we don't need to send it again here.
+      
+      const deliveryEmail = project.deliveryConfig?.email?.address || userEmail;
+      
+      if (result.report && !deliveryEmail) {
         console.log(
           `⚠️  Email not configured. Set deliveryConfig.email.address in project settings or ensure user profile has an email.\n`
         );
       }
+
 
       // 5. Update delivery log status if needed
       if (markAsDelivered) {
@@ -282,7 +258,7 @@ async function forceResearch(
     console.log();
 
     if (result.error) {
-      console.error(`\n⚠️  Error: ${result.error}\n`);
+      console.error(`\n  Error: ${result.error}\n`);
     }
   } catch (error: any) {
     console.error("\n" + "=".repeat(60));
