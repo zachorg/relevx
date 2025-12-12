@@ -1,3 +1,7 @@
+networks:
+  internal:
+    external: false
+
 services:
   scheduler:
     build:
@@ -40,8 +44,25 @@ services:
 
     # Health check
     healthcheck:
-      test: ["CMD", "node", "-e", "console.log('healthy')"]
+      test: [ "CMD", "node", "-e", "console.log('healthy')" ]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  relevx-backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    image: relevx-backend:latest
+    container_name: relevx-backend
+    restart: always
+    ports:
+      - "8080:8080" # Exposed for Cloudflare Tunnel
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./secrets:/app/secrets:ro
+    env_file:
+      - .env
+    networks:
+      - internal

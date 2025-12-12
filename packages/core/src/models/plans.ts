@@ -15,3 +15,8 @@ export interface PlanInfo
     | "infoStripeSubscriptionId"
   > { }
 
+export interface FetchPlansResponse {
+  ok: boolean;
+  plans: PlanInfo[];
+}
+

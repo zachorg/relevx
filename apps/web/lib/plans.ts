@@ -2,37 +2,24 @@
  * Projects management for web app
  */
 
-import {
-    collection,
-    doc,
-    getDocs,
-} from "firebase/firestore";
-import { db } from "./firebase";
-
 // Import types from core package
 import type {
-    PlanInfo
+    FetchPlansResponse,
+    PlanInfo,
 } from "core";
+import { relevx_api } from "./client";
 
 /**
  * Fetch all available plans
  */
-export async function fetchPlans(): Promise<Array<PlanInfo>> {
-    const plansRef = collection(db, "plans");
-    const snapshot = await getDocs(plansRef);
+export async function fetchPlans(): Promise<PlanInfo[]> {
+    const response = await relevx_api.get<FetchPlansResponse>(
+        "/api/v1/products/plans"
+    );
 
-    return snapshot.docs.map((doc) => ({
-        ...(doc.data() as any as PlanInfo),
-    }));
-}
+    if (!response.ok) {
+        throw new Error("Failed to fetch plans");
+    }
 
-/**
- * Update an existing project
- */
-export async function updateUserPlan(
-    userId: string,
-    projectId: string,
-    data: any
-): Promise<void> {
-    const projectRef = doc(db, "users", userId, "projects", projectId);
+    return response.plans;
 }

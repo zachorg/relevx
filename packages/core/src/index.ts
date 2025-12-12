@@ -20,6 +20,7 @@ export type {
 export type {
   Plan,
   PlanInfo,
+  FetchPlansResponse
 } from "./models/plans";
 
 export type {
@@ -139,4 +140,3 @@ export {
 // Hooks
 export { useAuth } from "./hooks/useAuth";
 export { useProjects } from "./hooks/useProjects";
-export { usePlans } from "./hooks/usePlans";

@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "core": [
+        "../../packages/core/src/index.ts"
+      ],
+      "core/*": [
+        "../../packages/core/src/*"
+      ],
+      "ui": [
+        "../../packages/ui/src/index.ts"
+      ],
+      "ui/*": [
+        "../../packages/ui/src/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*"
+  ],
+}
