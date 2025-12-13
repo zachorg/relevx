@@ -20,7 +20,7 @@ import {
   compileReport,
   type ContentToAnalyze,
   type ResultForReport,
-} from "../packages/core/src/services/openai";
+} from "../packages/core/src/services/llm";
 
 async function testQueryGeneration() {
   console.log("\n=== Testing Query Generation ===\n");

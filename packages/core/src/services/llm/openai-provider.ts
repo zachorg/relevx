@@ -11,6 +11,8 @@ import type {
   RelevancyResult,
   ResultForReport,
   CompiledReport,
+  SearchResultToFilter,
+  FilteredSearchResult,
 } from "../../interfaces/llm-provider";
 import {
   generateSearchQueries as openaiGenerateQueries,
@@ -24,6 +26,7 @@ import {
   compileReport as openaiCompileReport,
   compileReportWithRetry as openaiCompileReportRetry,
 } from "./report-compilation";
+import { filterSearchResultsSafe } from "./search-filtering"; 
 import { initializeOpenAI as initOpenAI, getClient } from "./client";
 
 /**
@@ -79,6 +82,17 @@ export class OpenAIProvider implements LLMProvider {
     );
 
     return queries;
+  }
+
+  /**
+   * Filter search results based on title/snippet
+   */
+  async filterSearchResults(
+    results: SearchResultToFilter[],
+    projectDescription: string
+  ): Promise<FilteredSearchResult[]> {
+    this.ensureInitialized();
+    return filterSearchResultsSafe(results, projectDescription);
   }
 
   /**

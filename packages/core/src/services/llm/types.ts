@@ -12,6 +12,24 @@ export interface GeneratedQuery {
 }
 
 /**
+ * Search result for pre-fetch filtering
+ */
+export interface SearchResultToFilter {
+  url: string;
+  title: string;
+  description: string;
+}
+
+/**
+ * Filtered search result status
+ */
+export interface FilteredSearchResult {
+  url: string;
+  keep: boolean;
+  reasoning?: string;
+}
+
+/**
  * Content to analyze for relevancy
  */
 export interface ContentToAnalyze {

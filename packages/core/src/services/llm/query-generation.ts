@@ -120,7 +120,7 @@ export async function generateSearchQueries(
       throw new Error("Unexpected response format from OpenAI");
     }
 
-    return queries.slice(0, 7); // Ensure max 7 queries
+    return queries.slice(0, 5); // Ensure max 5 queries
   } catch (error) {
     console.error("Error generating search queries:", error);
     throw error;

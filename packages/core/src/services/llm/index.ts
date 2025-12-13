@@ -17,6 +17,11 @@ export {
   analyzeRelevancyWithRetry,
 } from "./relevancy-analysis";
 
+export {
+  filterSearchResults,
+  filterSearchResultsSafe,
+} from "./search-filtering";
+
 export { compileReport, compileReportWithRetry } from "./report-compilation";
 
 export {

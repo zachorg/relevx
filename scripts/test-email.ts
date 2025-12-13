@@ -1,6 +1,6 @@
 
 import { sendReportEmail } from "../packages/core/src/services/email";
-import { CompiledReport } from "../packages/core/src/services/openai/types";
+import { CompiledReport } from "../packages/core/src/services/llm/types";
 import * as dotenv from "dotenv";
 import * as path from "path";
 
@@ -18,7 +18,27 @@ async function testEmail() {
   const mockReport: CompiledReport = {
     title: "Test Research Report",
     summary: "This is a test report generated to verify email functionality.",
-    markdown: "# Test Report\n\nThis is the **markdown** content of the report.\n\n- Point 1\n- Point 2",
+    markdown: `# Test Research Report
+    
+## Executive Overview
+This is a **bold statement** about the future of AI. The interactions between *politics* and *economics* are complex.
+
+### Key Findings
+1. **Model Growth**: GPT-5.2 has revolutionized the field.
+2. **Economic Impact**: Markets are [reacting positively](https://example.com).
+
+> "The future is here, it's just not evenly distributed."
+
+## Detailed Analysis
+The quick brown fox jumps over the lazy dog.
+
+- [New Research Paper](https://arxiv.org)
+- [TechCrunch Article](https://techcrunch.com)
+
+\`\`\`javascript
+console.log("Code block test");
+\`\`\`
+`,
     resultCount: 5,
     averageScore: 85,
   };

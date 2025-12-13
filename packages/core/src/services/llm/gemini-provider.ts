@@ -20,6 +20,7 @@ import type {
 import {
   QUERY_GENERATION_PROMPTS,
   RELEVANCY_ANALYSIS_PROMPTS,
+  SEARCH_RESULT_FILTERING_PROMPTS,
   REPORT_COMPILATION_PROMPTS,
   renderPrompt,
 } from "./prompts";
@@ -81,10 +82,62 @@ export class GeminiProvider implements LLMProvider {
         queries = parsed.queries;
       }
 
-      return queries.slice(0, options?.count || 7);
+      return queries.slice(0, options?.count || 5);
     } catch (error) {
       console.error("Gemini query generation error:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Filter search results based on title/snippet
+   */
+  async filterSearchResults(
+    results: any[],
+    projectDescription: string
+  ): Promise<any[]> {
+    const promptConfig = SEARCH_RESULT_FILTERING_PROMPTS;
+
+    if (results.length === 0) return [];
+
+    const resultsFormatted = results
+      .map(
+        (r, idx) => `
+Result ${idx + 1}:
+URL: ${r.url}
+Title: ${r.title}
+Snippet: ${r.description}
+---`
+      )
+      .join("\n");
+
+    const userPrompt = renderPrompt(promptConfig.user, {
+      description: projectDescription,
+      results: resultsFormatted,
+    });
+
+    const fullPrompt = `${promptConfig.system}\n\n${userPrompt}`;
+
+    try {
+      const result = await this.model.generateContent({
+        contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+        },
+      });
+
+      const responseText = result.response.text();
+      const parsed = JSON.parse(responseText);
+
+      return parsed.results || [];
+    } catch (error) {
+      console.error("Gemini search result filtering error:", error);
+      // Fallback: keep all results
+      return results.map((r) => ({
+        url: r.url,
+        keep: true,
+        reasoning: "Fallback due to error",
+      }));
     }
   }
 

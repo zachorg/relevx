@@ -26,6 +26,24 @@ export interface ContentToAnalyze {
 }
 
 /**
+ * Filtered search result status
+ */
+export interface FilteredSearchResult {
+  url: string;
+  keep: boolean;
+  reasoning?: string;
+}
+
+/**
+ * Search result item validation
+ */
+export interface SearchResultToFilter {
+  url: string;
+  title: string;
+  description: string;
+}
+
+/**
  * Relevancy analysis result for a single piece of content
  */
 export interface RelevancyResult {
@@ -78,6 +96,14 @@ export interface LLMProvider {
       focusRecent?: boolean;
     }
   ): Promise<GeneratedQuery[]>;
+
+  /**
+   * Filter search results based on title/snippet before fetching content
+   */
+  filterSearchResults?(
+    results: SearchResultToFilter[],
+    projectDescription: string
+  ): Promise<FilteredSearchResult[]>;
 
   /**
    * Analyze relevancy of content against project description

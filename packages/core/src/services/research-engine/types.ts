@@ -15,6 +15,7 @@ export interface ResearchOptions {
   maxResults?: number; // Max results to include (default: from project.settings)
   relevancyThreshold?: number; // Min score (default: from project.settings)
   concurrentExtractions?: number; // Parallel extractions (default: 3)
+  ignoreFrequencyCheck?: boolean; // Skip frequency validation (default: false)
 
   // Provider injection (for switching between providers)
   llmProvider?: LLMProvider; // Custom LLM provider (default: OpenAI)
@@ -48,6 +49,7 @@ export interface ResearchResult {
     title: string;
     summary: string;
     averageScore: number;
+    resultCount: number;
   };
 
   // Delivery

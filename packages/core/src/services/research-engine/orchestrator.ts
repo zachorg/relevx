@@ -119,8 +119,16 @@ export async function executeResearchForProject(
 
     const project = { id: projectDoc.id, ...projectDoc.data() } as Project;
 
+    // 1.5 Load user (for email fallback)
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+    const userEmail = userDoc.exists ? userDoc.data()?.email : undefined;
+
     // 2. Validate frequency (prevent running too often)
-    if (!validateFrequency(project.frequency, project.lastRunAt)) {
+    if (
+      !options?.ignoreFrequencyCheck &&
+      !validateFrequency(project.frequency, project.lastRunAt)
+    ) {
       throw new Error(
         `Project cannot be run more than once per day. Last run: ${new Date(
           project.lastRunAt!
@@ -153,6 +161,7 @@ export async function executeResearchForProject(
       excludeDomains: project.searchParameters?.excludedDomains,
       dateFrom: dateRange?.dateFrom,
       dateTo: dateRange?.dateTo,
+      count: 5, // Limit results per query to save tokens/API calls
     };
 
     // 6. Tracking
@@ -190,7 +199,7 @@ export async function executeResearchForProject(
         project.description,
         additionalContext,
         {
-          count: 7,
+          count: 5, // Reduced from 7 to save tokens
           focusRecent:
             project.searchParameters?.dateRangePreference === "last_24h" ||
             project.searchParameters?.dateRangePreference === "last_week",
@@ -235,22 +244,78 @@ export async function executeResearchForProject(
         }
       }
       const uniqueResults = Array.from(uniqueUrlsMap.values());
+      
+      // 7.3.5 Pre-filter by keywords (if specified) to avoid unnecessary extraction
+      // This saves bandwidth/scraping tokens by checking title/snippet first
+      const requiredKeywords = project.searchParameters?.requiredKeywords || [];
+      const excludedKeywords = project.searchParameters?.excludedKeywords || [];
+      
+      let preFilteredResults = uniqueResults;
+      
+      if (excludedKeywords.length > 0) {
+        preFilteredResults = preFilteredResults.filter(result => {
+          const contentText = `${result.title || ""} ${result.description || ""}`.toLowerCase();
+          return !excludedKeywords.some(keyword => contentText.includes(keyword.toLowerCase()));
+        });
+      }
 
+      // We don't filter strictly by required keywords here because they might appear in full content
+      // but we can prioritize them if we need to limit the results
+      
+      // 7.3.6 Limit total URLs to extract to avoid excessive processing
+      // Take top 25 results max
+      const limitedResults = preFilteredResults.slice(0, 25);
+      
       console.log(
-        `Found ${uniqueResults.length} unique URLs (after deduplication)`
+        `Found ${uniqueResults.length} unique URLs. Filtered to ${limitedResults.length} for extraction.`
       );
 
-      if (uniqueResults.length === 0) {
-        console.log("No new URLs found, stopping iterations");
+      if (limitedResults.length === 0) {
+        console.log("No new URLs found after filtering, stopping iterations");
         break;
       }
 
+      // 7.3.7 Mark these URLs as processed so we don't try them again in future iterations
+      for (const result of limitedResults) {
+        const normalizedUrl = result.url.toLowerCase().replace(/\/$/, "");
+        processedUrlsSet.add(normalizedUrl);
+      }
+      
+      // 7.4.a Filter results using LLM (Pre-fetch filtering)
+      // This saves tokens/time by not fetching irrelevant pages
+      let resultsToFetch = limitedResults;
+      
+      if (llmProvider.filterSearchResults && limitedResults.length > 0) {
+        console.log("Filtering search results with LLM...");
+        const resultsForFilter = limitedResults.map(r => ({
+          url: r.url,
+          title: r.title,
+          description: r.description
+        }));
+
+        try {
+          const filtered = await llmProvider.filterSearchResults(
+            resultsForFilter, 
+            project.description
+          );
+          
+          const urlsToKeep = new Set(
+            filtered.filter(f => f.keep).map(f => f.url)
+          );
+
+          resultsToFetch = limitedResults.filter(r => urlsToKeep.has(r.url));
+          console.log(`LLM filtered ${limitedResults.length} results down to ${resultsToFetch.length}`);
+        } catch (err) {
+          console.warn("LLM filtering failed, proceeding with all results:", err);
+        }
+      }
+
       // 7.4 Extract content
-      console.log(`Extracting content from ${uniqueResults.length} URLs...`);
+      console.log(`Extracting content from ${resultsToFetch.length} URLs...`);
       const extractedContents = await extractMultipleContents(
-        uniqueResults.map((r) => r.url),
+        resultsToFetch.map((r) => r.url),
         undefined,
-        concurrentExtractions
+        5 // Increased concurrency from 3 to 5
       );
 
       totalUrlsFetched += extractedContents.length;
@@ -271,8 +336,7 @@ export async function executeResearchForProject(
 
       // 7.4.5 Filter by keywords if specified
       let filteredContents = successfulContents;
-      const requiredKeywords = project.searchParameters?.requiredKeywords || [];
-      const excludedKeywords = project.searchParameters?.excludedKeywords || [];
+
 
       if (requiredKeywords.length > 0 || excludedKeywords.length > 0) {
         filteredContents = successfulContents.filter((content) => {
@@ -392,8 +456,7 @@ export async function executeResearchForProject(
 
         allRelevantResults.push(searchResult);
 
-        // 7.7.3 Update processed URLs
-        processedUrlsSet.add(extractedContent.normalizedUrl);
+        // processedUrlsSet update moved to earlier step (7.3.7)
       }
 
       // 7.8 Track query performance
@@ -503,14 +566,16 @@ export async function executeResearchForProject(
       );
 
       // 10.6 Send email if configured
+      const deliveryEmail = project.deliveryConfig?.email?.address || userEmail;
+
       if (
         project.resultsDestination === "email" &&
-        project.deliveryConfig?.email?.address
+        deliveryEmail
       ) {
-        console.log(`Sending report email to ${project.deliveryConfig.email.address}...`);
+        console.log(`Sending report email to ${deliveryEmail}...`);
         try {
           const emailResult = await sendReportEmail(
-            project.deliveryConfig.email.address,
+            deliveryEmail,
             report,
             projectId
           );

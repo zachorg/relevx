@@ -27,6 +27,7 @@
     "dotenv": "^16.4.5",
     "firebase": "^10.7.1",
     "firebase-admin": "^12.0.0",
+    "marked": "^17.0.1",
     "openai": "^6.9.0",
     "react": "^18.2.0",
     "resend": "^6.5.2"

@@ -23,11 +23,7 @@ const isNode =
   process.versions != null &&
   process.versions.node != null;
 
-const hasAdminCredentials =
-  process.env.FIREBASE_ADMIN_CLIENT_EMAIL ||
-  process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-
-const useAdminSDK = isNode && hasAdminCredentials;
+let useAdminSDK = false;
 
 // Type definitions for unified exports
 type Auth = any; // Will be firebase/auth Auth or null for admin
@@ -47,6 +43,12 @@ function initializeFirebase(): void {
   }
 
   initialized = true;
+
+  const hasAdminCredentials =
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+
+  useAdminSDK = !!(isNode && hasAdminCredentials);
 
   if (useAdminSDK) {
     // ============================================================================
@@ -202,4 +204,4 @@ const dbProxy = new Proxy(
 export { authProxy as auth, dbProxy as db };
 
 // Export a flag to check which SDK is being used
-export const isUsingAdminSDK = useAdminSDK;
+export { useAdminSDK as isUsingAdminSDK };
