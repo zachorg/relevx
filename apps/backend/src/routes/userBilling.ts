@@ -119,8 +119,8 @@ const routes: FastifyPluginAsync = async (app) => {
             planId: planId,
           },
           // @TODO: Update this to use the actual success and cancel URLs
-          success_url: "https://relevx.com/pricing?success=true",
-          cancel_url: "https://relevx.com/pricing?success=false",
+          success_url: "https://relevx.ai/pricing?success=true",
+          cancel_url: "https://relevx.ai/pricing?success=false",
         });
 
         if (!session) {
