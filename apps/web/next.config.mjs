@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["core"],
+  turbopack: {
+  },
 
   // Webpack configuration (for when not using Turbopack)
   webpack: (config, { isServer, webpack }) => {
